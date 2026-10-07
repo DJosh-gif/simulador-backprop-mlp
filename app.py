@@ -13,4 +13,4 @@ html_file = Path(__file__).parent / "index.html"
 with open(html_file, "r", encoding="utf-8") as f:
     html_code = f.read()
 
-components.html(html_code, height=950, scrolling=True)
+components.html(html_code, height=1000, scrolling=True)
