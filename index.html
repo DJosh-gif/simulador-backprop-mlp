@@ -1,0 +1,249 @@
+        function updatePhaseBadges() {
+            for (let i = 0; i <= 6; i++) {
+                const el = document.getElementById(`phase-${i}`);
+                if (i === currentStep) {
+                    el.className = "phase-badge flex items-center gap-2 px-3 py-1.5 rounded-lg border border-brand-500 bg-brand-900/60 text-white font-bold shadow-md";
+                } else {
+                    el.className = "phase-badge flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/90 text-slate-400 opacity-70";
+                }
+            }
+        }
+
+        function nextStep() {
+            if (currentStep === 0) { computeForwardPass(); currentStep = 1; }
+            else if (currentStep === 1) { currentStep = 2; }
+            else if (currentStep === 2) { currentStep = 3; }
+            else if (currentStep === 3) { computeBackpropagation(); currentStep = 4; }
+            else if (currentStep === 4) { currentStep = 5; }
+            else if (currentStep === 5) { currentStep = 6; }
+            else if (currentStep === 6) { applyGradientUpdates(); epochCount++; lossHistory.push(net.lossTotal); updateChart(); currentStep = 0; }
+            renderAll();
+        }
+
+        function prevStep() {
+            if (currentStep > 0) { currentStep--; renderAll(); }
+        }
+
+        function runFullEpoch() {
+            computeForwardPass();
+            computeBackpropagation();
+            applyGradientUpdates();
+            epochCount++;
+            lossHistory.push(net.lossTotal);
+            currentStep = 6;
+            updateChart();
+            renderAll();
+        }
+
+        function toggleAutoPlay() {
+            const btnText = document.getElementById('auto-text');
+            const btnIcon = document.getElementById('auto-icon');
+            if (isAutoPlaying) {
+                clearInterval(autoInterval);
+                isAutoPlaying = false;
+                btnText.innerText = 'Auto';
+                btnIcon.className = 'fa-solid fa-play';
+            } else {
+                isAutoPlaying = true;
+                btnText.innerText = 'Pausar';
+                btnIcon.className = 'fa-solid fa-pause';
+                autoInterval = setInterval(() => {
+                    runFullEpoch();
+                    if (net.lossTotal < 0.0001 || epochCount >= 1000) {
+                        toggleAutoPlay();
+                    }
+                }, autoSpeed);
+            }
+        }
+
+        function updateSpeedDisplay() {
+            autoSpeed = parseInt(document.getElementById('speed-slider').value);
+            document.getElementById('speed-val').innerText = autoSpeed + 'ms';
+            if (isAutoPlaying) {
+                clearInterval(autoInterval);
+                autoInterval = setInterval(() => {
+                    runFullEpoch();
+                    if (net.lossTotal < 0.0001 || epochCount >= 1000) toggleAutoPlay();
+                }, autoSpeed);
+            }
+        }
+
+        function resetNetwork() {
+            if (isAutoPlaying) toggleAutoPlay();
+            epochCount = 0; currentStep = 0; lossHistory = [];
+            loadPreset();
+            if (lossChart) { lossChart.data.labels = []; lossChart.data.datasets[0].data = []; lossChart.update(); }
+        }
+
+        function loadPreset() {
+            const preset = document.getElementById('preset-select').value;
+            config.preset = preset;
+            if (preset === 'simple') {
+                config.numOutputs = 2;
+                net.inputs = [0.05, 0.10]; net.targets = [0.01, 0.99];
+                net.w1 = [[0.15,0.25],[0.20,0.30]]; net.b1 = [0.35,0.35];
+                net.w2 = [[0.40,0.50],[0.45,0.55]]; net.b2 = [0.60,0.60];
+            } else if (preset === 'xor') {
+                config.numOutputs = 1;
+                net.inputs = [1.0,0.0]; net.targets = [1.0];
+                net.w1 = [[0.5,-0.2],[0.3,0.8]]; net.b1 = [-0.1,0.2];
+                net.w2 = [[0.7],[-0.4]]; net.b2 = [0.1];
+            }
+            document.getElementById('preset-select').value = preset;
+            liveRecompute();
+        }
+
+        function updateActivation() {
+            config.activation = document.getElementById('activation-select').value;
+            liveRecompute();
+        }
+
+        function updateLRDisplay() {
+            const val = parseFloat(document.getElementById('lr-slider').value);
+            config.learningRate = val;
+            document.getElementById('lr-val').innerText = val.toFixed(2);
+        }
+
+        function switchInspectorTab(tab) {
+            document.getElementById('tab-matrices').style.display = tab==='matrices'?'grid':'none';
+            document.getElementById('tab-chart').style.display = tab==='chart'?'block':'none';
+            document.getElementById('tab-inspector').style.display = tab==='inspector'?'block':'none';
+            document.getElementById('tab-btn-matrices').className = tab==='matrices'?'px-3 py-1 bg-brand-600 text-white rounded text-xs font-semibold transition shadow-sm':'px-3 py-1 bg-slate-800/90 hover:bg-slate-700/90 text-slate-300 rounded text-xs font-semibold transition shadow-sm';
+            document.getElementById('tab-btn-chart').className = tab==='chart'?'px-3 py-1 bg-brand-600 text-white rounded text-xs font-semibold transition shadow-sm':'px-3 py-1 bg-slate-800/90 hover:bg-slate-700/90 text-slate-300 rounded text-xs font-semibold transition shadow-sm';
+            document.getElementById('tab-btn-inspector').className = tab==='inspector'?'px-3 py-1 bg-brand-600 text-white rounded text-xs font-semibold transition shadow-sm':'px-3 py-1 bg-slate-800/90 hover:bg-slate-700/90 text-slate-300 rounded text-xs font-semibold transition shadow-sm';
+        }
+
+        function switchTheoryTab(tab) {
+            document.getElementById('content-theory-derivation').style.display = tab==='derivation'?'block':'none';
+            document.getElementById('content-theory-quiz').style.display = tab==='quiz'?'block':'none';
+            document.getElementById('tab-theory-derivation').className = tab==='derivation'?'px-4 md:px-5 py-3 text-xs font-bold text-brand-400 border-b-2 border-brand-500 bg-slate-900/90 transition flex items-center gap-2':'px-4 md:px-5 py-3 text-xs font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 transition flex items-center gap-2';
+            document.getElementById('tab-theory-quiz').className = tab==='quiz'?'px-4 md:px-5 py-3 text-xs font-bold text-brand-400 border-b-2 border-brand-500 bg-slate-900/90 transition flex items-center gap-2':'px-4 md:px-5 py-3 text-xs font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-200 transition flex items-center gap-2';
+        }
+
+        function toggleModal(id) {
+            document.getElementById(id).classList.toggle('hidden');
+        }
+
+        function showToast(msg='Copiado al portapapeles') {
+            const t=document.getElementById('toast'), m=document.getElementById('toast-msg');
+            m.textContent=msg; t.classList.remove('hidden');
+            setTimeout(()=>t.classList.add('hidden'),1800);
+        }
+
+        function checkQuiz(q,opt) {
+            const res=document.getElementById(`quiz-res-${q}`);
+            if(q===1){ if(opt==='B'){res.className='mt-2 text-[10px] font-bold text-emerald-400'; res.innerText='Correcto. Regla de cadena.';} else {res.className='mt-2 text-[10px] font-bold text-rose-400'; res.innerText='Incorrecto.';} }
+            if(q===2){ if(opt==='B'){res.className='mt-2 text-[10px] font-bold text-emerald-400'; res.innerText='Correcto. Overshooting/divergencia.';} else {res.className='mt-2 text-[10px] font-bold text-rose-400'; res.innerText='Incorrecto.';} }
+        }
+
+        function exportConfig() {
+            const state={config, net, epochCount, currentStep, lossHistory};
+            const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+            const url=URL.createObjectURL(blob);
+            const a=document.createElement('a'); a.href=url; a.download='simulador-backprop-config.json'; a.click(); URL.revokeObjectURL(url);
+            showToast('Configuración exportada');
+        }
+
+        function importConfig(file) {
+            if(!file) return;
+            const reader=new FileReader();
+            reader.onload=e=>{
+                try{
+                    const data=JSON.parse(e.target.result);
+                    if(data.config) config={...config,...data.config};
+                    if(data.net) net={...net,...data.net};
+                    epochCount=data.epochCount||0; currentStep=data.currentStep||0; lossHistory=data.lossHistory||[];
+                    document.getElementById('preset-select').value=config.preset||'custom';
+                    document.getElementById('activation-select').value=config.activation||'sigmoid';
+                    document.getElementById('lr-slider').value=config.learningRate; updateLRDisplay();
+                    if(lossChart){ lossChart.data.labels=lossHistory.map((_,i)=>i+1); lossChart.data.datasets[0].data=[...lossHistory]; lossChart.update(); }
+                    liveRecompute(); showToast('Configuración importada');
+                }catch(err){ alert('JSON inválido'); }
+            };
+            reader.readAsText(file);
+        }
+
+        function shareState() {
+            try {
+                const state={config, net, epochCount, currentStep};
+                const b64=btoa(encodeURIComponent(JSON.stringify(state)));
+                const url=new URL(location.href); url.searchParams.set('s', b64); history.replaceState({},'',url);
+                navigator.clipboard.writeText(url.toString()).then(()=>showToast('URL copiada'));
+            } catch(e) { showToast('No se pudo compartir'); }
+        }
+
+        function loadFromUrl() {
+            try {
+                const p=new URLSearchParams(location.search);
+                const s=p.get('s'); if(!s) return;
+                const state=JSON.parse(decodeURIComponent(atob(s)));
+                if(state.config) config={...config,...state.config};
+                if(state.net) net={...net,...state.net};
+                epochCount=state.epochCount||0; currentStep=state.currentStep||0;
+                document.getElementById('preset-select').value=config.preset||'custom';
+                document.getElementById('activation-select').value=config.activation||'sigmoid';
+                document.getElementById('lr-slider').value=config.learningRate; updateLRDisplay();
+                liveRecompute();
+            } catch(e) {}
+        }
+
+        function initChart() {
+            const ctx=document.getElementById('lossChart').getContext('2d');
+            lossChart=new Chart(ctx,{
+                type:'line',
+                data:{labels:[], datasets:[{label:'Error Total (MSE)', data:[], borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,0.08)', borderWidth:2, fill:true, tension:0.25, pointRadius:2}]},
+                options:{
+                    responsive:true, maintainAspectRatio:false,
+                    scales:{
+                        x:{grid:{color:'#1e293b'}, ticks:{color:'#94a3b8', font:{size:9}}, title:{display:true,text:'Épocas',color:'#64748b',font:{size:9}}},
+                        y:{grid:{color:'#1e293b'}, ticks:{color:'#94a3b8', font:{size:9}}, title:{display:true,text:'Pérdida',color:'#64748b',font:{size:9}}}
+                    },
+                    plugins:{legend:{labels:{color:'#cbd5e1',font:{size:10}}}}
+                }
+            });
+        }
+
+        function updateChart() {
+            if(!lossChart) return;
+            lossChart.data.labels.push(epochCount);
+            lossChart.data.datasets[0].data.push(net.lossTotal);
+            lossChart.update();
+        }
+
+        function renderStaticKaTeX() {
+            try {
+                katex.render("E_{total}=\\frac{1}{2}\\sum_k (y_k-a_k^{(2)})^2", document.getElementById('latex-eq-1'), {displayMode:true});
+                katex.render("\\frac{\\partial E}{\\partial w_{jk}^{(2)}}=\\frac{\\partial E}{\\partial a_k^{(2)}}\\cdot\\frac{\\partial a_k^{(2)}}{\\partial z_k^{(2)}}\\cdot\\frac{\\partial z_k^{(2)}}{\\partial w_{jk}^{(2)}}", document.getElementById('latex-eq-2'), {displayMode:true});
+                katex.render("\\frac{\\partial E}{\\partial w_{jk}^{(2)}}=a_j^{(1)}\\delta_k^{(2)}", document.getElementById('latex-eq-3'), {displayMode:true});
+                katex.render("\\frac{\\partial E}{\\partial w_{ij}^{(1)}}=\\left(\\sum_k \\delta_k^{(2)}w_{jk}^{(2)}\\right)\\sigma'(z_j^{(1)})a_i^{(0)}", document.getElementById('latex-eq-4'), {displayMode:true});
+                katex.render("\\delta_j^{(1)}=\\left(\\sum_k \\delta_k^{(2)}w_{jk}^{(2)}\\right)\\sigma'(z_j^{(1)})", document.getElementById('latex-eq-5'), {displayMode:true});
+            } catch(e) {}
+        }
+
+        function renderAll() {
+            document.getElementById('epoch-counter').innerText = `Época: ${epochCount} | Paso: ${currentStep}/6`;
+            renderMathBreakdown();
+            renderNetworkSVG();
+            updateMatrixInputs();
+            updateInspectorLive();
+            updatePhaseBadges();
+        }
+
+        window.onload = function() {
+            initChart();
+            renderStaticKaTeX();
+            updateLRDisplay();
+            updateSpeedDisplay();
+            loadFromUrl();
+            if (!location.search.includes('s')) loadPreset();
+            renderAll();
+        };
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') nextStep();
+            if (e.key === 'ArrowLeft') prevStep();
+            if (e.key === ' ') { e.preventDefault(); toggleAutoPlay(); }
+        });
+    </script>
+</body>
+</html>
